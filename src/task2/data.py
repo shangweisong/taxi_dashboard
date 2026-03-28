@@ -42,19 +42,42 @@ class TaxiDataLoader:
     """
 
     @staticmethod
+    def _load_raw(path: str) -> pd.DataFrame:
+        """Return a raw DataFrame from Google Sheets (if secrets are set) or a local CSV."""
+        try:
+            import streamlit as st
+            if "gcp_service_account" in st.secrets:
+                import gspread
+                from google.oauth2.service_account import Credentials
+
+                scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+                creds = Credentials.from_service_account_info(
+                    dict(st.secrets["gcp_service_account"]), scopes=scopes
+                )
+                gc = gspread.authorize(creds)
+                spreadsheet_id = st.secrets["gsheets"]["spreadsheet_id"]
+                worksheet = gc.open_by_key(spreadsheet_id).sheet1
+                records = worksheet.get_all_records()
+                return pd.DataFrame(records)
+        except Exception:
+            pass
+        return pd.read_csv(path)
+
+    @staticmethod
     def load(path: str = "data/aggregated_data.csv") -> pd.DataFrame:
         """Load and preprocess the aggregated taxi expense CSV.
 
-        Coerces numeric and datetime columns, then derives ``month_ts``,
-        ``month_label``, and ``weekday_sort`` columns used by downstream classes.
+        When ``gcp_service_account`` and ``gsheets.spreadsheet_id`` are present
+        in ``st.secrets`` (i.e. on Streamlit Cloud), data is fetched from Google
+        Sheets instead of the local CSV.
 
         Args:
-            path: Relative or absolute path to the CSV file.
+            path: Fallback path to the local CSV file (used during local development).
 
         Returns:
             Cleaned DataFrame with additional derived columns.
         """
-        df = pd.read_csv(path)
+        df = TaxiDataLoader._load_raw(path)
 
         # Coerce numeric columns
         for col in ["taxi_fare($)", "admin($)", "total_cost", "distance_run(km)", "duration_minutes"]:
