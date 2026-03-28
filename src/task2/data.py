@@ -44,12 +44,14 @@ class TaxiDataLoader:
     @staticmethod
     def _load_raw(path: str) -> pd.DataFrame:
         """Return a raw DataFrame from Google Sheets (if secrets are set) or a local CSV."""
-        try:
-            import streamlit as st
-            if "gcp_service_account" in st.secrets:
-                import gspread
-                from google.oauth2.service_account import Credentials
+        import streamlit as st
 
+        if "gcp_service_account" in st.secrets:
+            import traceback
+            import gspread
+            from google.oauth2.service_account import Credentials
+
+            try:
                 scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
                 creds = Credentials.from_service_account_info(
                     dict(st.secrets["gcp_service_account"]), scopes=scopes
@@ -59,8 +61,11 @@ class TaxiDataLoader:
                 worksheet = gc.open_by_key(spreadsheet_id).sheet1
                 records = worksheet.get_all_records()
                 return pd.DataFrame(records)
-        except Exception:
-            pass
+            except Exception as e:
+                st.error(f"**Google Sheets load failed:** {e}")
+                st.code(traceback.format_exc())
+                st.stop()
+
         return pd.read_csv(path)
 
     @staticmethod
